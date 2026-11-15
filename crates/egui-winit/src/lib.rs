@@ -3808,7 +3808,12 @@ fn translate_mouse_button(button: winit::event::MouseButton) -> Option<egui::Poi
 fn key_from_winit_key(key: &winit::keyboard::Key) -> Option<egui::Key> {
     match key {
         winit::keyboard::Key::Named(named_key) => key_from_named_key(*named_key),
-        winit::keyboard::Key::Character(str) => egui::Key::from_name(str.as_str()),
+        winit::keyboard::Key::Character(str) => match str.as_str() {
+            // iOS sends the keyboard's Return and Tab as the text they insert
+            "\n" | "\r" => Some(egui::Key::Enter),
+            "\t" => Some(egui::Key::Tab),
+            name => egui::Key::from_name(name),
+        },
         winit::keyboard::Key::Unidentified(_) | winit::keyboard::Key::Dead(_) => None,
     }
 }
@@ -5172,6 +5177,30 @@ pub fn short_window_event_description(event: &winit::event::WindowEvent) -> &'st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn return_and_tab_sent_as_text_are_their_keys() {
+        use winit::keyboard::{Key, NamedKey};
+        for (text, key) in [
+            ("\n", egui::Key::Enter),
+            ("\r", egui::Key::Enter),
+            ("\t", egui::Key::Tab),
+        ] {
+            assert_eq!(
+                key_from_winit_key(&Key::Character(text.into())),
+                Some(key),
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            key_from_winit_key(&Key::Named(NamedKey::Enter)),
+            Some(egui::Key::Enter)
+        );
+        assert_eq!(
+            key_from_winit_key(&Key::Character("a".into())),
+            Some(egui::Key::A)
+        );
+    }
 
     #[test]
     fn window_size_is_the_whole_screen_on_ios_and_the_inner_size_elsewhere() {
