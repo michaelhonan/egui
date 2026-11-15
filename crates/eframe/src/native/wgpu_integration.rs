@@ -498,9 +498,19 @@ impl WinitApp for WgpuWinitApp<'_> {
     }
 
     fn suspended(&mut self, _: &ActiveEventLoop) -> crate::Result<EventResult> {
+        if let Some(running) = &mut self.running {
+            running.app.on_suspend();
+        }
         #[cfg(target_os = "android")]
         self.drop_window()?;
         Ok(EventResult::Save)
+    }
+
+    fn memory_warning(&mut self, _: &ActiveEventLoop) -> crate::Result<EventResult> {
+        if let Some(running) = &mut self.running {
+            running.app.on_memory_warning();
+        }
+        Ok(EventResult::Wait)
     }
 
     fn device_event(

@@ -557,9 +557,17 @@ impl WinitApp for GlowWinitApp<'_> {
 
     fn suspended(&mut self, _: &ActiveEventLoop) -> crate::Result<EventResult> {
         if let Some(running) = &mut self.running {
+            running.app.on_suspend();
             running.glutin.borrow_mut().on_suspend()?;
         }
         Ok(EventResult::Save)
+    }
+
+    fn memory_warning(&mut self, _: &ActiveEventLoop) -> crate::Result<EventResult> {
+        if let Some(running) = &mut self.running {
+            running.app.on_memory_warning();
+        }
+        Ok(EventResult::Wait)
     }
 
     fn device_event(

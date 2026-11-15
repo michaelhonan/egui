@@ -230,6 +230,18 @@ pub trait App {
     #[cfg(not(feature = "glow"))]
     fn on_exit(&mut self) {}
 
+    /// Called when the app is suspended: on iOS when it stops being the active app (it may go to
+    /// the background next), on Android when its window goes away.
+    ///
+    /// The OS may end a suspended app without calling [`Self::on_exit`], so save here what must
+    /// not be lost. Called before [`Self::save`].
+    fn on_suspend(&mut self) {}
+
+    /// Called when the OS warns that the app is using too much memory (iOS, Android).
+    ///
+    /// Free what can be rebuilt, such as caches: an app that doesn't may be ended.
+    fn on_memory_warning(&mut self) {}
+
     // ---------
     // Settings:
 

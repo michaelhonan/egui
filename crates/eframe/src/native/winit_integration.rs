@@ -119,6 +119,8 @@ pub trait WinitApp {
 
     fn suspended(&mut self, event_loop: &ActiveEventLoop) -> crate::Result<EventResult>;
 
+    fn memory_warning(&mut self, event_loop: &ActiveEventLoop) -> crate::Result<EventResult>;
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) -> crate::Result<EventResult>;
 
     fn device_event(

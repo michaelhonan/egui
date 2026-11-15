@@ -321,6 +321,15 @@ impl<T: WinitApp> ApplicationHandler<UserEvent> for WinitAppWrapper<T> {
         });
     }
 
+    fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {
+        profiling::scope!("Event::MemoryWarning");
+
+        event_loop_context::with_event_loop_context(event_loop, move || {
+            let event_result = self.winit_app.memory_warning(event_loop);
+            self.handle_event_result(event_loop, event_result);
+        });
+    }
+
     fn exiting(&mut self, event_loop: &ActiveEventLoop) {
         // On Mac, Cmd-Q we get here and then `run_app_on_demand` doesn't return (despite its name),
         // so we need to save state now:
