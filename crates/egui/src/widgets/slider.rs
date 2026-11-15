@@ -529,7 +529,9 @@ impl Slider<'_> {
     fn slider_ui(&mut self, ui: &Ui, response: &Response) {
         let geom = self.core.geometry(response.rect, ui);
 
-        if let Some(pointer_position_2d) = response.interact_pointer_pos() {
+        if let Some(pointer_position_2d) = response.interact_pointer_pos()
+            && slider_core::pointer_moves_slider(ui, response, self.core.orientation)
+        {
             let new_value =
                 slider_core::value_at_pointer(ui, &geom, pointer_position_2d, self.core.smart_aim);
             self.set_value(new_value);

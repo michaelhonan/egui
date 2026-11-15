@@ -611,7 +611,12 @@ impl Widget for DragValue<'_> {
             let button = Button::new(atoms)
                 .with_classes(classes)
                 .wrap_mode(TextWrapMode::Extend)
-                .sense(Sense::click_and_drag())
+                // On a touch screen a drag is a scroll of what the value is in: a tap edits it.
+                .sense(if ui.input(|i| i.has_touch_screen()) {
+                    Sense::click()
+                } else {
+                    Sense::click_and_drag()
+                })
                 .gap(0.0)
                 .min_size(min_size.unwrap_or_else(|| ui.spacing().interact_size)); // TODO(emilk): find some more generic solution to `min_size`
 

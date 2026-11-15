@@ -779,3 +779,51 @@ mod tests {
         assert_eq!(geom.value_from_position(positions.max), 100.0);
     }
 }
+
+/// Whether the pointer on `response` moves a slider of `orientation` this frame.
+///
+/// With a mouse it always does: a press sets the value and a drag follows the pointer. On a touch
+/// screen a finger that lands on a slider may be scrolling past it, so only a drag that sets off
+/// along the slider moves it; any other drag scrolls what the slider is in, and a press alone
+/// moves nothing. (A slider senses drags only, so egui calls it dragged from the press: which way
+/// the finger goes is decided once it has moved further than a click may.)
+pub(crate) fn pointer_moves_slider(
+    ui: &Ui,
+    response: &Response,
+    orientation: SliderOrientation,
+) -> bool {
+    if !ui.input(|i| i.has_touch_screen()) {
+        return true;
+    }
+    let horizontal = orientation == SliderOrientation::Horizontal;
+    let id = response.id.with("touch-moves-slider");
+    if !response.dragged() {
+        ui.data_mut(|m| m.remove::<bool>(id));
+        return false;
+    }
+    let decided = ui.data(|m| m.get_temp::<bool>(id));
+    let along = decided.or_else(|| {
+        let d = ui
+            .input(|i| i.pointer.total_drag_delta())
+            .unwrap_or_default();
+        let far = ui.ctx().options(|o| o.input_options.max_click_dist);
+        (d.length() > far).then(|| {
+            let along = if horizontal {
+                d.x.abs() >= d.y.abs()
+            } else {
+                d.y.abs() >= d.x.abs()
+            };
+            ui.data_mut(|m| m.insert_temp(id, along));
+            along
+        })
+    });
+    if along == Some(false) {
+        let d = ui.input(|i| i.pointer.delta());
+        ui.scroll_with_delta(if horizontal {
+            vec2(0.0, d.y)
+        } else {
+            vec2(d.x, 0.0)
+        });
+    }
+    along == Some(true)
+}
