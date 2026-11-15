@@ -40,11 +40,18 @@ mod ios {
                     let window_scene = Retained::cast_unchecked::<UIWindowScene>(scene.clone());
                     if let Some(window) = window_scene.keyWindow() {
                         let insets = window.safeAreaInsets();
+                        // The on-screen keyboard counts as covered too, so what the app lays
+                        // out stays above it (the keyboard layout guide sits on the safe area's
+                        // bottom edge while the keyboard is away).
+                        let bounds = window.bounds();
+                        let keyboard = window.keyboardLayoutGuide().layoutFrame();
+                        let under_keyboard =
+                            bounds.origin.y + bounds.size.height - keyboard.origin.y;
                         return SafeAreaInsets(MarginF32 {
                             top: insets.top as f32,
                             left: insets.left as f32,
                             right: insets.right as f32,
-                            bottom: insets.bottom as f32,
+                            bottom: insets.bottom.max(under_keyboard) as f32,
                         });
                     }
                 }
