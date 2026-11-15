@@ -3,10 +3,60 @@ pub use ios::get_safe_area_insets;
 
 #[cfg(target_os = "ios")]
 mod ios {
+    use std::ptr::NonNull;
+    use std::sync::{Mutex, Once, PoisonError};
+
+    use block2::RcBlock;
     use egui::{SafeAreaInsets, epaint::MarginF32};
     use objc2::{ClassType, rc::Retained};
-    use objc2_foundation::{MainThreadMarker, NSObjectProtocol};
-    use objc2_ui_kit::{UIApplication, UISceneActivationState, UIWindowScene};
+    use objc2_foundation::{
+        MainThreadMarker, NSNotification, NSNotificationCenter, NSObjectProtocol, NSValue,
+    };
+    use objc2_ui_kit::{
+        NSValueUIGeometryExtensions as _, UIApplication, UIKeyboardFrameEndUserInfoKey,
+        UIKeyboardWillChangeFrameNotification, UISceneActivationState, UIWindowScene,
+    };
+
+    /// Where the on-screen keyboard's top edge is (screen points), as it last moved; `None` before
+    /// it first shows. It is off the bottom of the screen while the keyboard is away.
+    static KEYBOARD_TOP: Mutex<Option<f64>> = Mutex::new(None);
+
+    /// Follow the on-screen keyboard: UIKit says where it is going whenever it moves.
+    fn watch_keyboard() {
+        static WATCH: Once = Once::new();
+        WATCH.call_once(|| {
+            let block = RcBlock::new(|notification: NonNull<NSNotification>| {
+                // SAFETY: UIKit passes a live notification for the duration of the call.
+                #[expect(unsafe_code)]
+                let notification = unsafe { notification.as_ref() };
+                // SAFETY: the keyboard notifications' user info holds an `NSValue` with a
+                // `CGRect` under `UIKeyboardFrameEndUserInfoKey` (`downcast` checks the class).
+                #[expect(unsafe_code)]
+                let top = unsafe {
+                    notification
+                        .userInfo()
+                        .and_then(|info| info.objectForKey(UIKeyboardFrameEndUserInfoKey))
+                        .and_then(|value| value.downcast::<NSValue>().ok())
+                        .map(|value| value.CGRectValue().origin.y)
+                };
+                if let Some(top) = top {
+                    *KEYBOARD_TOP.lock().unwrap_or_else(PoisonError::into_inner) = Some(top);
+                }
+            });
+            // SAFETY: the block lives as long as the observer, which lives as long as the app
+            // (the token is kept on purpose: the keyboard is followed until the app ends).
+            #[expect(unsafe_code)]
+            let observer = unsafe {
+                NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
+                    Some(UIKeyboardWillChangeFrameNotification),
+                    None,
+                    None,
+                    &block,
+                )
+            };
+            std::mem::forget(observer);
+        });
+    }
 
     /// Gets the ios safe area insets.
     ///
@@ -23,6 +73,7 @@ mod ios {
             return SafeAreaInsets::default();
         };
 
+        watch_keyboard();
         let app = UIApplication::sharedApplication(main_thread_marker);
 
         #[expect(unsafe_code)]
@@ -41,12 +92,13 @@ mod ios {
                     if let Some(window) = window_scene.keyWindow() {
                         let insets = window.safeAreaInsets();
                         // The on-screen keyboard counts as covered too, so what the app lays
-                        // out stays above it (the keyboard layout guide sits on the safe area's
-                        // bottom edge while the keyboard is away).
+                        // out stays above it.
                         let bounds = window.bounds();
-                        let keyboard = window.keyboardLayoutGuide().layoutFrame();
-                        let under_keyboard =
-                            bounds.origin.y + bounds.size.height - keyboard.origin.y;
+                        let under_keyboard = KEYBOARD_TOP
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .map_or(0.0, |top| bounds.origin.y + bounds.size.height - top)
+                            .clamp(0.0, bounds.size.height);
                         return SafeAreaInsets(MarginF32 {
                             top: insets.top as f32,
                             left: insets.left as f32,

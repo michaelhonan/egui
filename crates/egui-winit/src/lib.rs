@@ -2121,7 +2121,7 @@ impl State {
         {
             let insets = safe_area::get_safe_area_insets();
             // (compared with the last read, not egui's: an app may scale what it is given)
-            let last = egui::Id::new("egui-winit-ios-safe-area");
+            let last = egui::Id::unique("egui-winit-ios-safe-area");
             if self
                 .egui_ctx
                 .data(|d| d.get_temp::<egui::SafeAreaInsets>(last))
