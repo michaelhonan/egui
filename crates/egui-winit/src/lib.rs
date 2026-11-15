@@ -4598,6 +4598,18 @@ fn process_viewport_command(
                 }
             });
         }
+        // iOS has no window theme (winit ignores `set_theme`), but the status bar is drawn over
+        // the app: give it text that reads on the app's own dark or light background.
+        #[cfg(target_os = "ios")]
+        ViewportCommand::SetTheme(t) => {
+            use winit::platform::ios::{StatusBarStyle, WindowExtIOS as _};
+            window.set_preferred_status_bar_style(match t {
+                egui::SystemTheme::Light => StatusBarStyle::DarkContent,
+                egui::SystemTheme::Dark => StatusBarStyle::LightContent,
+                egui::SystemTheme::SystemDefault => StatusBarStyle::Default,
+            });
+        }
+        #[cfg(not(target_os = "ios"))]
         ViewportCommand::SetTheme(t) => {
             window.set_theme(match t {
                 egui::SystemTheme::Light => Some(winit::window::Theme::Light),
