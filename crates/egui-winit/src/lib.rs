@@ -56,6 +56,8 @@ mod ime_reset;
 mod ime_surrounding;
 mod output_selector;
 mod safe_area;
+mod window_scene;
+pub use window_scene::adopt_window_scene;
 mod window_settings;
 
 pub use window_settings::{WindowGeometry, WindowSettings};

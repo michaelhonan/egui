@@ -491,6 +491,8 @@ impl WinitApp for WgpuWinitApp<'_> {
 
         let viewport = &running.shared.borrow().viewports[&ViewportId::ROOT];
         if let Some(window) = &viewport.window {
+            // iOS sends `Resumed` again as the app becomes active, by when its scene is connected
+            egui_winit::adopt_window_scene(window);
             Ok(EventResult::RepaintNow(window.id()))
         } else {
             Ok(EventResult::Wait)
