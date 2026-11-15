@@ -285,7 +285,7 @@ impl Painter {
         profiling::scope!("Painter::set_window"); // profile_function gives bad names for async functions
 
         if let Some(window) = window {
-            let size = window.inner_size();
+            let size = surface_size(&window);
             if !self.surfaces.contains_key(&viewport_id) {
                 let surface = self.instance.create_surface(window)?;
                 self.add_surface(surface, viewport_id, size).await?;
@@ -311,7 +311,7 @@ impl Painter {
         profiling::scope!("Painter::set_window_unsafe"); // profile_function gives bad names for async functions
 
         if let Some(window) = window {
-            let size = window.inner_size();
+            let size = surface_size(window);
             if !self.surfaces.contains_key(&viewport_id) {
                 let surface = unsafe {
                     self.instance
@@ -929,6 +929,21 @@ impl Painter {
     #[expect(clippy::needless_pass_by_ref_mut, clippy::unused_self)]
     pub fn destroy(&mut self) {
         // TODO(emilk): something here?
+    }
+}
+
+/// The size to create a window's surface at: the size egui lays the window out in.
+///
+/// This must match `egui_winit::window_size`, which this crate doesn't depend on: on iOS winit's
+/// `inner_size` is only the safe area while the view covers the whole screen, so egui lays out
+/// in (and the surface takes) the `outer_size`; everywhere else both use the `inner_size`. A
+/// surface of another size stretches the picture over the window. Later sizes come from the
+/// caller through [`Painter::on_window_resized`].
+fn surface_size(window: &winit::window::Window) -> winit::dpi::PhysicalSize<u32> {
+    if cfg!(target_os = "ios") {
+        window.outer_size()
+    } else {
+        window.inner_size()
     }
 }
 

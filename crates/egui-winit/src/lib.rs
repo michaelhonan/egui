@@ -72,16 +72,42 @@ use winit::{
     window::{CursorGrabMode, CustomCursor, Window, WindowButtons, WindowLevel},
 };
 
+/// The size, in physical pixels, that egui lays a window out in: its
+/// [`window_size_in_pixels`].
 pub fn screen_size_in_pixels(window: &Window) -> egui::Vec2 {
-    let size = if cfg!(target_os = "ios") {
-        // `outer_size` Includes the area behind the "dynamic island".
-        // It is up to the eframe user to make sure the dynamic island doesn't cover anything important.
-        // That will be easier once https://github.com/rust-windowing/winit/pull/3890 lands
-        window.outer_size()
-    } else {
-        window.inner_size()
-    };
+    let size = window_size_in_pixels(window);
     egui::vec2(size.width as f32, size.height as f32)
+}
+
+/// The size, in physical pixels, that egui lays a window out in and that its
+/// render surface must have, so the picture lines up with the window
+/// (see [`window_size`]).
+pub fn window_size_in_pixels(window: &Window) -> PhysicalSize<u32> {
+    window_size(
+        window.inner_size(),
+        window.outer_size(),
+        cfg!(target_os = "ios"),
+    )
+}
+
+/// Which of a window's two sizes egui uses, given its `inner` and `outer`
+/// size and whether it runs on iOS.
+///
+/// On iOS winit's `inner_size` is only the safe area, while the view (and the
+/// surface drawn into it) covers the whole screen, including the area behind
+/// the "dynamic island" and the home indicator, so egui uses `outer_size`.
+/// It is up to the eframe user to make sure the dynamic island doesn't cover
+/// anything important; [`egui::Context::content_rect`] is the safe area.
+/// Everywhere else it uses `inner_size`.
+///
+/// The layout and the render surface must both use this: a surface sized
+/// differently from the layout stretches the picture over the window.
+pub fn window_size(
+    inner: PhysicalSize<u32>,
+    outer: PhysicalSize<u32>,
+    ios: bool,
+) -> PhysicalSize<u32> {
+    if ios { outer } else { inner }
 }
 
 /// Calculate the `pixels_per_point` for a given window, given the current egui zoom factor
@@ -5134,6 +5160,19 @@ pub fn short_window_event_description(event: &winit::event::WindowEvent) -> &'st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn window_size_is_the_whole_screen_on_ios_and_the_inner_size_elsewhere() {
+        // An iPad Pro 13" in portrait at 2x: the safe area is 49 pt shorter.
+        let inner = PhysicalSize::new(2064, 2654);
+        let outer = PhysicalSize::new(2064, 2752);
+        assert_eq!(window_size(inner, outer, true), outer);
+        assert_eq!(window_size(inner, outer, false), inner);
+        // A desktop window's outer size includes its decorations, which egui never draws.
+        let inner = PhysicalSize::new(800, 600);
+        let outer = PhysicalSize::new(802, 630);
+        assert_eq!(window_size(inner, outer, false), inner);
+    }
 
     #[test]
     fn destroyed_window_resets_ime_cursor_purpose_and_allow_on_every_platform() {

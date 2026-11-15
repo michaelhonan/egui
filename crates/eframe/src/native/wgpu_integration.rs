@@ -1010,10 +1010,14 @@ impl WgpuWinitRunning<'_> {
             winit::event::WindowEvent::Resized(physical_size) => {
                 // The event can be stale: winit buffers events emitted while we create and set up
                 // the window (e.g. maximize it), so it can arrive after the window has changed size again.
+                // The surface takes the size egui lays out in (on iOS the whole screen, not winit's
+                // safe-area `inner_size`), or the picture is stretched over the window.
                 let physical_size = viewport_id
                     .and_then(|id| shared.viewports.get(&id))
                     .and_then(|viewport| viewport.window.as_ref())
-                    .map_or(*physical_size, |window| window.inner_size());
+                    .map_or(*physical_size, |window| {
+                        egui_winit::window_size_in_pixels(window)
+                    });
 
                 // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
                 // See: https://github.com/rust-windowing/winit/issues/208
@@ -1407,20 +1411,23 @@ fn handle_viewport_output(
         let viewport =
             initialize_or_update_viewport(viewports, ids, class, builder, viewport_ui_cb, painter);
 
-        let old_inner_size = viewport.window.as_ref().map(|window| window.inner_size());
+        let old_size = viewport
+            .window
+            .as_ref()
+            .map(|window| egui_winit::window_size_in_pixels(window));
 
         viewport.process_commands(egui_ctx, commands);
 
         // For Wayland : https://github.com/emilk/egui/issues/4196
         if cfg!(target_os = "linux")
             && let Some(window) = viewport.window.as_ref()
-            && let Some(old_inner_size) = old_inner_size
+            && let Some(old_size) = old_size
         {
-            let new_inner_size = window.inner_size();
-            if new_inner_size != old_inner_size
+            let new_size = egui_winit::window_size_in_pixels(window);
+            if new_size != old_size
                 && let (Some(width), Some(height)) = (
-                    NonZeroU32::new(new_inner_size.width),
-                    NonZeroU32::new(new_inner_size.height),
+                    NonZeroU32::new(new_size.width),
+                    NonZeroU32::new(new_size.height),
                 )
             {
                 painter.on_window_resized(viewport_id, width, height);
