@@ -2114,6 +2114,25 @@ impl State {
             && screen_size_in_points.y > 0.0)
             .then(|| Rect::from_min_size(Pos2::ZERO, screen_size_in_points));
 
+        // iOS: the safe area changes without an event as the on-screen keyboard comes and goes
+        // (it counts as covered, `safe_area.rs`): read it every frame, and draw another while it
+        // moves.
+        #[cfg(target_os = "ios")]
+        {
+            let insets = safe_area::get_safe_area_insets();
+            // (compared with the last read, not egui's: an app may scale what it is given)
+            let last = egui::Id::new("egui-winit-ios-safe-area");
+            if self
+                .egui_ctx
+                .data(|d| d.get_temp::<egui::SafeAreaInsets>(last))
+                != Some(insets)
+            {
+                self.egui_ctx.data_mut(|d| d.insert_temp(last, insets));
+                self.egui_ctx.request_repaint();
+            }
+            self.egui_input.safe_area_insets = Some(insets);
+        }
+
         // Tell egui which viewport is now active:
         self.egui_input.viewport_id = self.viewport_id;
 
@@ -3028,6 +3047,15 @@ impl State {
                 }
                 winit::event::TouchPhase::Cancelled => {
                     self.pointer_touch_id = None;
+                    // Let go of the press too, or the button stays down. It is let go of far
+                    // away, so it isn't a click on what is under the finger.
+                    let away = egui::pos2(-1.0e6, -1.0e6);
+                    self.pointer_pos_in_points = Some(away);
+                    self.egui_input.events.push(egui::Event::PointerMoved(away));
+                    self.on_mouse_button_input(
+                        winit::event::ElementState::Released,
+                        winit::event::MouseButton::Left,
+                    );
                     self.pointer_pos_in_points = None;
                     self.egui_input.events.push(egui::Event::PointerGone);
                 }
