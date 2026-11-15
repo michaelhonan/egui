@@ -313,6 +313,11 @@ impl Clipboard {
             };
         }
 
+        #[cfg(target_os = "ios")]
+        if let Some(text) = ios_pasteboard::text() {
+            return Some(text);
+        }
+
         Some(self.clipboard.clone())
     }
 
@@ -368,6 +373,9 @@ impl Clipboard {
             }
             return;
         }
+
+        #[cfg(target_os = "ios")]
+        ios_pasteboard::set_text(&text);
 
         self.clipboard = text;
     }
@@ -1119,5 +1127,35 @@ mod tests {
             &*image.bytes,
             &[255, 0, 0, 255, 255, 255, 255, 128, 0, 0, 0, 0]
         );
+    }
+}
+
+/// iOS: the system pasteboard (`UIPasteboard.general`), so text copied in egui reaches other apps
+/// and text copied in them can be pasted. arboard has no iOS backend; without this the clipboard
+/// is a string inside the app.
+#[cfg(target_os = "ios")]
+mod ios_pasteboard {
+    use objc2_foundation::NSString;
+    use objc2_ui_kit::UIPasteboard;
+
+    /// The pasteboard's text, if it holds any.
+    pub fn text() -> Option<String> {
+        let pasteboard = UIPasteboard::generalPasteboard();
+        // SAFETY: `string` is a plain property read on the shared pasteboard object, which UIKit
+        // allows from any thread.
+        #[expect(unsafe_code)]
+        let text = unsafe { pasteboard.string() };
+        text.map(|s| s.to_string())
+    }
+
+    /// Put `text` on the pasteboard.
+    pub fn set_text(text: &str) {
+        let pasteboard = UIPasteboard::generalPasteboard();
+        // SAFETY: `setString` is a plain property write on the shared pasteboard object, which
+        // UIKit allows from any thread; the `NSString` is copied by the pasteboard.
+        #[expect(unsafe_code)]
+        unsafe {
+            pasteboard.setString(Some(&NSString::from_str(text)));
+        }
     }
 }
